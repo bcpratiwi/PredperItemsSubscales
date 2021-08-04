@@ -1,5 +1,4 @@
 # Script to generate item loadings
-# Weak, medium, strong measurement
 # n items per subscale, 4 or 8
 # return = loadings, omega
 
