@@ -10,6 +10,7 @@ i <- args[2]  # row of the design
 library(glmnet)
 library(superpc)
 library(caret)
+library(PCovR)
 library(MASS)
 library(glmnetUtils)
 
@@ -98,7 +99,6 @@ set.seed((r + 1000)*i)
 # MSE objects
 assign(paste0("exp1_MSE_design", i,"_rep", reps), exp1_MSE)
 rm(exp1_MSE)
-setwd("/exports/fsw/bpratiwi/project_2/V10/exp1/MSE")
 save(list = ls(pattern = "exp1_MSE"), file = paste0("exp1_MSE_design",i,"_rep",reps, ".Rdata"))
 
 
