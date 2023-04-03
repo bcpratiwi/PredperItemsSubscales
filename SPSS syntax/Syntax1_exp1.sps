@@ -1,9 +1,9 @@
 ﻿* Encoding: UTF-8.
 
 DATASET ACTIVATE DataSet1.
-GLM elnet_Items elnet_Subscales Meta_method_both ols_Subscales PCovR_Items SPCA_Items BY nitems 
+GLM elnet_Items elnet_Subscales FAREG_Items Meta_method_both ols_Subscales PCovR_Items SPCA_Items BY nitems 
     ntrain r12 sig_comps nscales meas
-  /WSFACTOR=Rule 6 Polynomial 
+  /WSFACTOR=Rule 7 Polynomial 
   /METHOD=SSTYPE(3)
   /PRINT=ETASQ HOMOGENEITY 
   /CRITERIA=ALPHA(.05)
@@ -26,9 +26,9 @@ GLM elnet_Items elnet_Subscales Meta_method_both ols_Subscales PCovR_Items SPCA_
     ntrain*r12*sig_comps*nscales*meas nitems*ntrain*r12*sig_comps*nscales*meas.
 
 DATASET ACTIVATE DataSet2.
-GLM elnet_Items elnet_Subscales Meta_method_both PCovR_Items SPCA_Items BY nitems ntrain r12 
+GLM elnet_Items elnet_Subscales FAREG_Items Meta_method_both PCovR_Items SPCA_Items BY nitems ntrain r12 
     sig_comps nscales meas
-  /WSFACTOR=Rule 5 Polynomial 
+  /WSFACTOR=Rule 6 Polynomial 
   /METHOD=SSTYPE(3)
   /PRINT=ETASQ HOMOGENEITY 
   /CRITERIA=ALPHA(.05)
