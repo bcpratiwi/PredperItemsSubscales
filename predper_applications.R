@@ -68,8 +68,8 @@ MSE_Y_SLT_ols <- expand.grid(fold = 1:kfold, reps = 1:reps,
                                        Method = "ols",  
                                        MSE = 0, n = 0)
 
-MSE_Y_SLT_ols <- cbind.data.frame(MSE_Y_SLT_ols, matrix(NA, nrow(MSE_Y_SLT_ols), ncol(items_TOTAL)+1))
-colnames(MSE_Y_SLT_ols)[6:ncol(MSE_Y_SLT_ols)] <- c("Intercept", colnames(items_TOTAL))
+MSE_Y_SLT_ols <- cbind.data.frame(MSE_Y_SLT_ols, matrix(NA, nrow(MSE_Y_SLT_ols), ncol(items)+1))
+colnames(MSE_Y_SLT_ols)[6:ncol(MSE_Y_SLT_ols)] <- c("Intercept", colnames(items))
 
 
 ypredlm = 0
@@ -252,10 +252,10 @@ for(k in 1:kfold) {
 
 # SPCA --------------
 MSE_Y_SLT_SPCA <- expand.grid(fold = 1:kfold, reps = 1:reps, 
-                                    Method = c("SPCA"),  
-                                    MSE = 0, n = 0, threshold = 0, ncomp = 0, nitems = 0)
+                                        Method = c("SPCA"),  
+                                        MSE = 0, n = 0, threshold = 0, ncomp = 0, varexp = 0, nitems = 0)
 MSE_Y_SLT_SPCA <- cbind(MSE_Y_SLT_SPCA, matrix(NA, nrow(MSE_Y_SLT_SPCA), ncol(items)))
-colnames(MSE_Y_SLT_SPCA)[9:ncol(MSE_Y_SLT_SPCA)] <- colnames(items)
+colnames(MSE_Y_SLT_SPCA)[10:ncol(MSE_Y_SLT_SPCA)] <- colnames(items)
 
 
 for (r in 1:reps){
@@ -292,6 +292,7 @@ for (r in 1:reps){
     comps.test <- superpc.predict(m_spca, data = mydata.train, newdata = mydata.test, 
                                   threshold = opt.thresh, 
                                   n.components =  ncomp) 
+    svditemstrain <- svd(mydata.train$x[comps.train$which.features,])
     ypredict <- cbind(1, comps.test$v.pred) %*% coefs 
     
     MSE_Y_SLT_SPCA[MSE_Y_SLT_SPCA$reps == r& MSE_Y_SLT_SPCA$fold == k, "MSE"] <-
@@ -301,12 +302,15 @@ for (r in 1:reps){
       ncomp
     MSE_Y_SLT_SPCA[MSE_Y_SLT_SPCA$reps == r& MSE_Y_SLT_SPCA$fold == k, "threshold"] <-
       opt.thresh
+    MSE_Y_SLT_SPCA[MSE_Y_SLT_SPCA$reps == r&  MSE_Y_SLT_SPCA$fold == k, "varexp"] <- sum((svditemstrain$d^2/sum(svditemstrain$d^2))[1:ncomp])
+    
     MSE_Y_SLT_SPCA[MSE_Y_SLT_SPCA$reps == r& MSE_Y_SLT_SPCA$fold == k, "nitems"] <-
       sum(comps.train$which.features)
-    MSE_Y_SLT_SPCA[MSE_Y_SLT_SPCA$reps == r& MSE_Y_SLT_SPCA$fold == k, 9:ncol(MSE_Y_SLT_SPCA)] <- 
+    MSE_Y_SLT_SPCA[MSE_Y_SLT_SPCA$reps == r& MSE_Y_SLT_SPCA$fold == k, 10:ncol(MSE_Y_SLT_SPCA)] <- 
       comps.train$which.features
   } # fold
 }#reps
+
 
 # PCovR --------------
 MSE_Y_SLT_PCoVR <- expand.grid(fold = 1:kfold, reps = 1:reps, 
@@ -436,34 +440,171 @@ for (i in 1:reps) {
   cat("finish = ", i)
 }
 
+# Factor Analysis Regression -----------------------------------------
+source("fac_regression.R")
+MSE_Y_CA_FAREG <- expand.grid(fold = 1:kfold, reps = 1:reps, 
+                                        Method = "FAREG",  
+                                        MSE = 0, n = 0)
+nscale <- 9
+scalenames <- unlist(lapply(strsplit(colnames(X_TOTAL), split = "_"), function(x) x[1]))
+
+MSE_Y_CA_FAREG <- cbind.data.frame(MSE_Y_CA_FAREG, matrix(NA, nrow(MSE_Y_CA_FAREG), nscale+1))
+colnames(MSE_Y_CA_FAREG)[6:ncol(MSE_Y_CA_FAREG)] <- c("Intercept", scalenames)
+
+
+ypred = rep(0, N)
+N <- nrow(items)
+
+mydata <- cbind.data.frame(Y = Y, items)
+
+for (r in 1:reps){
+  set.seed(100*r)
+  
+  folds <- sample(rep(1:kfold, each = ceiling(N/kfold)), N, replace = F)
+  
+  for(k in 1:kfold) {
+    
+    cat("rep = ", r, "fold = ", k, "\r")  
+    
+    # Factor regression
+    CERQ.model <- syntaxmod(colnames(items), nscale, scalenames = scalenames)
+    facreg <- fa.reg(mydata$Y[folds!=k], items[folds!=k, ],
+                     CERQ.model)
+    ypred[folds==k] <- predictfareg(facreg, items[folds==k, ])
+    
+    
+    MSE_Y_CA_FAREG[MSE_Y_CA_FAREG$fold == k & 
+                               MSE_Y_CA_FAREG$reps == r &
+                               MSE_Y_CA_FAREG$Method == "FAREG", "MSE"] <- 
+      mean((ypred[folds==k] - mydata[folds==k, "Y"])^2)
+    
+    MSE_Y_CA_FAREG[MSE_Y_CA_FAREG$fold == k & 
+                               MSE_Y_CA_FAREG$reps == r &
+                               MSE_Y_CA_FAREG$Method == "FAREG", "n"] <- sum(folds==k) 
+    
+    MSE_Y_CA_FAREG[MSE_Y_CA_FAREG$fold == k & 
+                               MSE_Y_CA_FAREG$reps == r &
+                               MSE_Y_CA_FAREG$Method == "FAREG", 6:ncol(MSE_Y_CA_FAREG)] <- facreg$regcoefs 
+  } # kfold
+} # reps 
+
+save(MSE_Y_CA_FAREG, file = "MSE_Y_CA_FAREG.Rdata")
 
 # Merge objects  ------------------
-vars <- c("fold", "reps", "Method", "MSE", "n")
+files <- dir(pattern = ".Rdata")
+n <- length(files)
+for(i in 1:n)  load(files[i])
+getmode <- function(v) {
+  uniqv <- unique(v)
+  uniqv[which.max(tabulate(match(v, uniqv)))]
+}
+sdn <- function(x) sd(x)*sqrt(length(x)-1)/sqrt(length(x))
+MSE_Y_CA_FSR <- MSE_Y_CA_FAREG
+# CERQ ------------------
+# OLS
+MSE_Y_CA_ols$p <- 9
+MSE_Y_CA_ols$nitems <- 36
+
+MSE_Y_SLT_ols$p <- 36
+MSE_Y_SLT_ols$nitems <- 36
+
+# FSR
+MSE_Y_CA_FSR$p <- 9
+MSE_Y_CA_FSR$nitems <- 36
+
+# elastic net 
+MSE_Y_CA_elnet[, 
+                         9:ncol(MSE_Y_CA_elnet)] <- ifelse(
+                           MSE_Y_CA_elnet[,9:ncol(MSE_Y_CA_elnet) ] != 0, TRUE, FALSE)
+MSE_Y_CA_elnet$p <- rowSums(MSE_Y_CA_elnet[, 9:ncol(MSE_Y_CA_elnet)])
+
+MSE_Y_CA_elnet$nitems <- MSE_Y_CA_elnet$p *4
+
+
+MSE_Y_SLT_elnet[, 
+                          9:ncol(MSE_Y_SLT_elnet)] <- ifelse(
+                            MSE_Y_SLT_elnet[,9:ncol(MSE_Y_SLT_elnet) ] != 0, TRUE, FALSE)
+MSE_Y_SLT_elnet$p <- rowSums(MSE_Y_SLT_elnet[, 9:ncol(MSE_Y_SLT_elnet)])
+MSE_Y_SLT_elnet$nitems <- MSE_Y_SLT_elnet$p 
+
+# SPCA
+MSE_Y_SLT_SPCA$p <- MSE_Y_SLT_SPCA$ncomp
+
+# PCovR
+MSE_Y_SLT_PCovR$p <- MSE_Y_SLT_PCovR$ncomp
+MSE_Y_SLT_PCovR$nitems <- 36
+
+vars <- c("fold", "reps", "Method", "MSE", "n", "p", "nitems")
 MSE_Y_CA <- rbind.data.frame(MSE_Y_CA_ols[,vars],
                                        MSE_Y_CA_elnet[,vars])
 MSE_Y_CA$input <- "Subscales"
-
 MSE_Y_SLT <- rbind.data.frame(MSE_Y_SLT_ols[,vars],
-                              MSE_Y_SLT_elnet[,vars],
-                              MSE_Y_SLT_SPCA[,vars],
-                              MSE_Y_SLT_PCovR[,vars])
+                                        MSE_Y_SLT_elnet[,vars],
+                                        MSE_Y_SLT_SPCA[,vars],
+                                        MSE_Y_SLT_PCovR[,vars],
+                                        MSE_Y_CA_FSR[,vars])
 MSE_Y_SLT$input <- "Items"
 MSE_Y <- rbind.data.frame(MSE_Y_CA, MSE_Y_SLT)
-
 MSE_Y$SS <- MSE_Y$MSE * MSE_Y$n
 
+N <- 240
 results <- aggregate(SS ~ reps + Method + input, sum,data = MSE_Y)
 results$MSE <- results$SS/N
-results_meta <- data.frame(reps = 1:reps, Method = "meta-method", input = "-",
-                           SS = MSE_per_rep*N, MSE = MSE_per_rep)
+results_meta <- data.frame(reps = 1:100, Method = "meta-method", input = "-",
+                           SS = CERQ_mse_per_rep*N, MSE = CERQ_mse_per_rep)
 results <- rbind.data.frame(results,results_meta)
-
-gg <- ggboxplot(results, x = "Method", y = "MSE", fill = "input", 
+results$input <- factor(results$input, labels = c("Both", "Items", "Subscales"))
+results$rule <- paste0(results$Method, "_", results$input)
+results$Method <- factor(results$Method, 
+                         levels = c("ols", "FAREG", "elnet", "meta-method", "SPCA", "PCovR"),
+                         labels = c("OLS", "FSR", "Elastic net", "Meta-method", " SPCA", "PCovR"))
+results$rule <- factor(results$rule, levels = c("ols_Subscales", "ols_Items", "FAREG_Items", "elnet_Subscales", "elnet_Items",
+                                                "meta-method_Both", "SPCA_Items", "PCovR_Items"),
+                       labels = c("OLS Subscales", "OLS Items", "FSR Items","Elastic net Subscales", "Elastic net Items",
+                                  "Meta-method", "SPCA Items", "PCovR Items"))
+gg <- ggboxplot(results, x = "rule", y = "MSE", fill = "input", 
                 palette = "Pastel1", bxp.errorbar = T,
-                xlab = "", ylab =  expression(Estimated ~ Prediction ~ Error ~ MSE[pr]))
+                xlab = "", 
+                ylab =  expression(Estimated ~ Prediction ~ Error ~ italic(MSE[pr])))
 gg +theme(legend.position = "none",
           text = element_text(family="serif",size = 15),
           axis.line = element_line(colour = "black"),
+          axis.text.x = element_text(angle = 45, hjust = 1),
           panel.background = element_rect(fill = "white", colour= "black"),
           panel.grid.major = element_blank(),
           panel.grid.minor = element_blank(),)
+
+ggsave("p2_MSE_CERQlogdepr.pdf", width = 8, height = 7)
+
+# table
+ave.results <- aggregate(MSE ~ Method + input, 
+                         mean, data = results)
+
+# sd is the standard error in this scenario
+sd.results <- aggregate(MSE ~ Method + input,sdn, data = results)
+MSE_Y$Method <- factor(MSE_Y$Method,levels = c("ols", "FSR", "elnet", "meta-method", "SPCA", "PCovR"),
+                                 labels = c("OLS", "FSR", "Elastic net", "Meta-method", " SPCA", "PCovR"))
+nitems.results <- aggregate(nitems ~ Method + input, getmode, data =MSE_Y)
+p.results <- aggregate(p ~ Method + input, getmode, data =MSE_Y)
+tabs <- cbind.data.frame(ave.results[-1,], SE= sd.results$MSE[-1], nitems = nitems.results$nitems,p = p.results$p)
+meta <- cbind.data.frame(ave.results[1,], SE= sd.results$MSE[1],  nitems = '-',p = '-')
+tabs <- rbind.data.frame(tabs, meta)
+xtable(tabs[order(tabs$MSE),], digits = 3)
+
+# variance explained from the components in SPCA --
+spca.ncomp <- aggregate(cbind(nitems,p) ~ fold, getmode, data=MSE_Y_SLT_SPCA)
+ave.var <- aggregate(varexp ~ reps+ p + nitems, 
+                     mean, data = MSE_Y_SLT_SPCA)
+ave.var %>%
+  ggplot(aes(x=nitems, y=varexp, fill=factor(p))) + 
+  geom_boxplot() + ylim(0,1) + theme_bw()
+
+aggregate(cbind(varexp, nitems)~p, summary, data=ave.var)
+
+MSE_Y_SLT_SPCA %>%
+  filter(ncomp == 1 & nitems == 9) %>%
+  summarize(mean_exp=mean(varexp))
+
+sum3 <-function(X) round(c(min(X), mean(X), max(X))*100,2)
+tab <- aggregate(varexp~p, sum3, data=MSE_Y_SLT_SPCA)
+table(MSE_Y_SLT_SPCA$p)/1000 *100
